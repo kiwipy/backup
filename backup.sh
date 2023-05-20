@@ -1,13 +1,6 @@
 #!/bin/bash
 VERSION=3.4
-#
-# Modified for new server!
-#
-# Create a new full backup every Monday and differential backups for Tuesday-Sunday.
-#
-# crontab entry (every day at 5am)
-# 0 5 * * * /usr/bin/backup.sh > /dev/null 2>&1
-#
+
 if [[ $EUID -ne 0 ]]; then
    echo "This script must be run as root"
    exit 1
@@ -20,23 +13,14 @@ msg(){
 }
 msg "$0 VERSION=$VERSION"
 
-
-DEP="rsync bc"
-TARGET="/pool/data"
-DEST="/pool/backup"
+TARGET="PATH TO WHAT DIR TO BACKUP HERE"
+DEST="PATH TO WHERE TO PUT BACKUP HERE"
 INDEX="$DEST/index"
 LOG="$DEST/backup.log"
 TIMESTAMP=$(date +%d-%m-%Y)
 INT_DAY=$(date +%u)
 DAY=$(date +%a)
 WEEK=$(date +%W-%Y)
-
-for dep in $DEP; do
-	if [ ! -f /usr/bin/$dep ]; then
-		msg "Installing dependency [$dep] ..."
-		zypper -qn install $dep
-	fi
-done
 
 msg "Calculating required space ..."
 TMP=$(du -sh $TARGET/ | awk '{print $1}' | sed 's/.$//')
