@@ -5,3 +5,6 @@
     or use incremental backups weekly with tar.<br />
 - Old backups will be removed if low on space.<br />
 - Requires bc command to calculate available space.
+
+### Restore function does not work with the tar script!
+A completely new script will be replacing this repo soon.
