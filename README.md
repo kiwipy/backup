@@ -1,10 +1,9 @@
-# backup
-- Automated backup using rsync or tar.<br />
+# backup version 6!
+- Backup directory using tar.<br />
 - Run it daily using cron job.<br />
-- Creates a new full backup every sunday and a differential backup every day until next sunday.<br />
-    or use incremental backups weekly with tar.<br />
+- Creates a new full backup every month and an incremental backup every day until next month.<br />
 - Old backups will be removed if low on space.<br />
 - Requires bc command to calculate available space.
+- Restore latest backup or choose a date.
 
-### Restore function does not work with the tar script!
-A completely new script will be replacing this repo soon.
+### $ toolbox-backup --help for more info!
