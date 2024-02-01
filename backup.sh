@@ -1,9 +1,8 @@
 #!/bin/bash
 #
-# Copyright William Andersson 2024
-# https://github.com/william-andersson
 #
-VERSION=6.0
+#
+VERSION=6.2
 if [[ $EUID -ne 0 ]]; then
    echo "This script must be run as root"
    exit 1
@@ -18,12 +17,18 @@ MONTH_YEAR=$(date +%b-%Y)
 LAST_MONTH_YEAR=$(date --date='-1 month' +%b-%Y)
 FREE_SPACE_MARGIN="1.1" #10%
 
+if [ ! $(cat /etc/toolbox-backup.cfg | grep TIMER) ];then
+	echo "TIMER=\"off\"" >> /etc/toolbox-backup.cfg
+	source /etc/toolbox-backup.cfg
+fi
+
 function view_help(){
 	echo -e "$NAME Version $VERSION"
 	echo -e "\nIMPORTANT: This script can only cope with one option at a time"
 	echo -e "\t\tand in exact order described under usage.\n"
 	echo -e "\t\tCurrent source path: $SRC"
 	echo -e "\t\tCurrent dest path: $DEST"
+	echo -e "\t\tCurrent auto setting: $TIMER"
 	echo -e "\nUsage:"
 	echo -e " --source <PATH>\t\tSet SOURCE directory."
 	echo -e " --dest <PATH>\t\t\tSet DESTINATION directory."
@@ -35,6 +40,9 @@ function view_help(){
 	echo -e " --list [DATE]\t\t\tList available backups,"
 	echo -e " \t\t\t\t  DATE format should be: Jan-yyyy"
 	echo -e " \t\t\t\t  or leave blank for whole month and size."
+	echo ""
+	echo -e " --auto <OPTION>\t\tEnable systemd timer,"
+	echo -e " \t\t\t\t  valid OPTIONS: daily, weekly, off"
 	echo ""
 	echo -e " --remove\t\t\tManually remove the oldest backup."
 	echo -e " --log\t\t\t\tShow log messages."
@@ -63,7 +71,7 @@ function set_source(){
 	TRIM_PATH=${1%/}
 	if [ ! $1 ];then
 		echo "No selected path!"
-		exit 1
+		exit 2
 	else
 		sed -i 's:'$SRC':'$TRIM_PATH':' /etc/toolbox-backup.cfg
 		msg "Changed source $SRC -> $TRIM_PATH"
@@ -75,7 +83,7 @@ function set_dest(){
 	TRIM_PATH=${1%/}
 	if [ ! $1 ];then
 		echo "No selected path!"
-		exit 1
+		exit 2
 	else
 		sed -i 's:'$DEST':'$TRIM_PATH':' /etc/toolbox-backup.cfg
 		msg "Changed destination $DEST -> $TRIM_PATH"
@@ -90,13 +98,36 @@ function migrate(){
 	TRIM_PATH=${1%/}
 	if [ ! $1 ];then
 		echo "No selected path!"
-		exit 1
+		exit 2
 	else
 		rsync --remove-source-files -ah $DEST/ $TRIM_PATH --info=progress2
 		logger -t $NAME "Backup directory migrated to [$TRIM_PATH]"
 		msg "Backup directory migrated to [$TRIM_PATH]"
 		rm -rv $DEST
 		set_dest $1
+	fi
+}
+
+function auto_timer(){
+	default_timer=$(cat /etc/systemd/system/toolbox-backup.timer | grep OnCalendar)
+	if [ "$1" == "off" ];then
+		sed -i 's:'$default_timer':'OnCalendar=$1':' /etc/systemd/system/toolbox-backup.timer
+		sed -i 's:'$TIMER':'$1':' /etc/toolbox-backup.cfg
+		systemctl disable toolbox-backup.timer --now
+		logger -t $NAME "auto_timer set: [$1]"
+		msg "auto_timer set: $1"
+	elif [ "$1" == "daily" ];then
+		sed -i 's:'$default_timer':'OnCalendar=$1':' /etc/systemd/system/toolbox-backup.timer
+		sed -i 's:'$TIMER':'$1':' /etc/toolbox-backup.cfg
+		systemctl enable toolbox-backup.timer --now
+		logger -t $NAME "auto_timer set: [$1]"
+		msg "auto_timer set: $1"
+	elif [ "$1" == "weekly" ];then
+		sed -i 's:'$default_timer':'OnCalendar=$1':' /etc/systemd/system/toolbox-backup.timer
+		sed -i 's:'$TIMER':'$1':' /etc/toolbox-backup.cfg
+		systemctl enable toolbox-backup.timer --now
+		logger -t $NAME "auto_timer set: [$1]"
+		msg "auto_timer set: $1"
 	fi
 }
 
@@ -132,11 +163,11 @@ function create_backup(){
 	if [ ! -d "$SRC" ]; then
 		echo "No source directory!"
 		logger -t $NAME "No source directory found!"
-		exit 1
+		exit 2
 	elif [ ! -d "$DEST" ]; then
 		echo "No destination directory!"
 		logger -t $NAME "No destination directory found!"
-		exit 1
+		exit 2
 	fi
 	calc_free_space
 	msg "Starting backup process!"
@@ -154,7 +185,7 @@ function create_backup(){
 		if [ -f "$DEST/$MONTH_YEAR/$DATE.tar" ];then
 			msg "Incremental backup already exists [$DEST/$MONTH_YEAR/$DATE.tar], skipping."
 			logger -t $NAME "Incremental exists [$DEST/$MONTH_YEAR/$DATE.tar]"
-			exit 1
+			exit 0
 		fi
 		msg "Creating incremental backup ..."
 		cd $SRC
@@ -169,7 +200,7 @@ function restore_from_backup(){
 	msg "Start restoring from backup ..."
 	if [ $# -lt "2" ];then
 		echo "Error: No arguments given!"
-		exit 1
+		exit 2
 	elif [ $# -gt "2" ];then
 		RESTORE_DATE=$(date -d "$2" +'%d-%m-%Y')
 		RESTORE_MONTH=$(date -d "$2" +'%b-%Y')
@@ -186,13 +217,12 @@ function restore_from_backup(){
 			msg "Restoring $day to $RESTORE_DIR ..."
 			tar -xf $DEST/$RESTORE_MONTH/$day -g /dev/null -C $RESTORE_DIR
 			msg "Backup has been restored!"
-			exit 0
+			break
 		else
 			msg "Restoring $day to $RESTORE_DIR ..."
 			tar -xf $DEST/$RESTORE_MONTH/$day -g /dev/null -C $RESTORE_DIR
 		fi
 	done
-	exit 0
 }
 
 
@@ -214,6 +244,9 @@ elif [ "$1" == "--dest" ]; then
 	exit 0
 elif [ "$1" == "--migrate" ]; then
 	migrate $2
+	exit 0
+elif [ "$1" == "--auto" ]; then
+	auto_timer $2
 	exit 0
 elif [ "$1" == "--list" ]; then
 	list_backups $2
