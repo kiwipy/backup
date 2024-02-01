@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-#
+# Copyright William Andersson 2024
+# https://github.com/william-andersson
 #
 VERSION=6.2
 if [[ $EUID -ne 0 ]]; then
