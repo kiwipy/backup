@@ -14,6 +14,16 @@ if [ ! -f "/etc/toolbox-backup.cfg" ]; then
 else
 	echo "File /etc/toolbox-backup.cfg already exists, skipping..."
 fi
+if [ ! -f "/etc/systemd/system/toolbox-backup.timer" ]; then
+	install -v -C -m 777 -o root backup.timer /etc/systemd/system/toolbox-backup.timer
+else
+	echo "File /etc/systemd/system/toolbox-backup.timer already exists, skipping..."
+fi
+if [ ! -f "/etc/systemd/system/toolbox-backup.service" ]; then
+	install -v -C -m 777 -o root backup.service /etc/systemd/system/toolbox-backup.service
+else
+	echo "File /etc/systemd/system/toolbox-backup.service already exists, skipping..."
+fi
 
 ##### Resolve dependencies (DON'T TOUCH) ######
 DNF="dnf -y install"
