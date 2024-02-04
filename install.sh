@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+# File for:    backup (Github version)
+# Copyright:   William Andersson 2024
+# Website:     https://github.com/william-andersson
+# License:     GPL
+#
 if [[ $EUID -ne 0 ]]; then
    echo "This script must be run as root"
    exit 1
@@ -25,26 +31,8 @@ else
 	echo "File /etc/systemd/system/toolbox-backup.service already exists, skipping..."
 fi
 
-##### Resolve dependencies (DON'T TOUCH) ######
-DNF="dnf -y install"
-APT="apt-get -y install"
-ZYP="zypper -n install"
-PKG_MGR=""
-if command -v zypper &> /dev/null;then
-	PKG_MGR=$ZYP
-elif command -v apt-get &> /dev/null;then
-	PKG_MGR=$APT
-elif command -v dnf &> /dev/null;then
-	PKG_MGR=$DNF
-else
-	echo "No package-manager found!"
-	echo "Please install dependencies: ${DEPENDENCIES[@]}"
-	exit 0
+if [ ! -z "$DEPENDENCIES" ];then
+	/usr/bin/toolbox-depin ${DEPENDENCIES[@]}
 fi
-for DEP in ${DEPENDENCIES[@]};do
-	if ! command -v $DEP &> /dev/null;then
-		$PKG_MGR ${DEPENDENCIES[@]}
-	fi
-done
 
 echo "Done."

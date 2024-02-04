@@ -1,7 +1,9 @@
 #!/bin/bash
 #
-# Copyright William Andersson 2024
-# https://github.com/william-andersson
+# Application: backup (Github version)
+# Copyright:   William Andersson 2024
+# Website:     https://github.com/william-andersson
+# License:     GPL
 #
 VERSION=6.2
 
