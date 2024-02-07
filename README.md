@@ -5,6 +5,6 @@
 - Old backups will be removed if low on space.<br />
 - Requires bc command to calculate available space.
 - Restore latest backup or choose a date.
-- Migrate entire backup directory to new location.
+- Migrate entire backup directory to new location (requires rsync).
 
 ### $ toolbox-backup --help for more info!
