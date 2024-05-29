@@ -1,0 +1,11 @@
+VERSION 7.0.0
++  Changed
+    - Name changed from backup to bakup.
+    - Complete rewrite.
+    - New install path.
+    - Switched from incremental to differential backups.
++  Added
+    - Archive compression.
+    - New setup function.
+    - Size limit for stored backups.
+    - Automate clean up of old backups.

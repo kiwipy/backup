@@ -1,0 +1,11 @@
+[Unit]
+Description="Run backups daily or weekly"
+Requires=bakup-auto.service
+
+[Timer]
+OnCalendar=off
+Persistent=true
+Unit=bakup-auto.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,6 @@
+[Unit]
+Description="run /usr/local/bin/bakup"
+
+[Service]
+Environment="STARTED_BY_SYSTEMD=yes"
+ExecStart=/usr/local/bin/bakup --run
