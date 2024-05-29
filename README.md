@@ -4,12 +4,7 @@
 > [!NOTE]
 > This version is not compatible with any previous versions.<br>
 
-This backup script utilizes tar and systemd to create differential backups daily or weekly.<br>
-The script will continue to make differential backups until the latest backup is 70% of or<br>
-larger than the first initial backup. When this threshold is reached a new full backup is made.<br>
-The script will also remove old backups if the --set-limit is lower than (target directory + stored backups).<br>
-It will also automatically update --set-limit so that it's always two times larger than the target directory<br>
-as long as there is enough free space.<br>
+This backup script utilizes tar and systemd to create differential backups daily or weekly. The script will continue to make differential backups until the latest backup is 70% of or larger than the first initial backup. When this threshold is reached a new full backup is made. The script will also remove old backups if the<br>--set-limit is lower than (target directory + stored backups). It will also automatically update --set-limit so that it's always two times larger than the target directory as long as there is enough free space.<br>
 
 ### Install and setup
 Install with **`sudo ./install.sh`** and then run **`sudo backup --setup`** to configure.<br>
