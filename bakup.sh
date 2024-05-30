@@ -6,7 +6,7 @@
 # Website:     https://github.com/william-andersson
 # License:     GPL  
 #
-VERSION=7.0.0
+VERSION=7.0.1
 
 if [[ $EUID -ne 0 ]]; then
     echo -e "\nThis script must be run as root!"
@@ -74,10 +74,10 @@ setup(){
     CURRENT=""
 
     if [ ! -d "/usr/local/etc" ];then
-        mkdir -pv /usr/local/etc
+        mkdir -p /usr/local/etc
     fi
     touch /usr/local/etc/bakup.cfg
-    chmod -v 755 /usr/local/etc/bakup.cfg
+    chmod 755 /usr/local/etc/bakup.cfg
 
     update_config
     exit 0
@@ -349,7 +349,7 @@ case $1 in
         list_backups
         ;;
     --log)
-        journalctl -e -t backup
+        journalctl -e -t bakup
         ;;
     --restore)
         restore_from_backup $2 $3
