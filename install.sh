@@ -7,11 +7,11 @@ echo "*** Installing bakup $(grep 'VERSION=' bakup.sh | sed 's/^.*=//') ***"
 
 # Program files (always install)
 install -C -D -m 755 -v bakup.sh /usr/local/bin/bakup
-install -C -D -m 755 -v bakup-auto.service /etc/systemd/system/bakup-auto.service
+install -C -D -m 644 -v bakup-auto.service /etc/systemd/system/bakup-auto.service
 
 # Config files (install if not exist)
 if [ ! -f "/etc/systemd/system/bakup-auto.timer" ];then
-    install -C -D -m 755 -v bakup-auto.timer /etc/systemd/system/bakup-auto.timer
+    install -C -D -m 644 -v bakup-auto.timer /etc/systemd/system/bakup-auto.timer
 fi
 if [ ! -f "/usr/local/share/bakup/exclude" ];then
     install -C -D -m 644 -v exclude /usr/local/share/bakup/exclude

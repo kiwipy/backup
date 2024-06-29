@@ -6,7 +6,7 @@
 # Website:     https://github.com/william-andersson
 # License:     GPL  
 #
-VERSION=7.0.1
+VERSION=7.0.2
 
 if [[ $EUID -ne 0 ]]; then
     echo -e "\nThis script must be run as root!"
@@ -349,7 +349,7 @@ case $1 in
         list_backups
         ;;
     --log)
-        journalctl -e -t bakup
+        journalctl -r -u bakup-auto
         ;;
     --restore)
         restore_from_backup $2 $3
