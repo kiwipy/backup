@@ -6,7 +6,7 @@
 # Website:     https://github.com/william-andersson
 # License:     GPL  
 #
-VERSION=7.0.2
+VERSION=7.1.0
 
 if [[ $EUID -ne 0 ]]; then
     echo -e "\nThis script must be run as root!"
@@ -30,23 +30,48 @@ DATE=$(date +%d-%m-%Y)
 
 view_help(){
 cat <<EOF
-Bakup $VERSION (Automated backups)
-Usage: $0 <OPTION>
+Usage: bakup <OPTION>
+Automated differential backups using tar.
 
 Options:
---setup                        Run initial setup.
---run                          Run backup manually.
---list                         List available backups
---log                          Show log messages.
---migrate <PATH>               Move entire backup directory.
---restore [DATE] <PATH>        Restore from backup
---help                         Display this text.
+  --setup                    run initial setup to configure bakup
+                               existing backups will be found if using the
+                               same directories
+  --run                      perform backup now manually
+  --list                     list all available backups
+  --log                      show log messages from journalctl
+  --migrate <PATH>           move entire backup directory to new location
+  --restore <DATE> <PATH>    restore from backup where PATH is directory path
+                               for extracted archive
+  --help                     display this help text
+  --version                  print version information
 
 Settings:
---set-target <PATH>            Change TARGET directory.
---set-dest <PATH>              Change DESTINATION directory.
---set-limit <INT>              Change size limit for backup location (GB).
---set-auto <OPTION>            OPTIONS: daily, weekly, off
+  --set-target <PATH>        set or change TARGET directory
+  --set-dest <PATH>          set or change DESTINATION directory
+  --set-auto <OPTION>        run backup automatically at interval
+                               valid options: daily, weekly, off
+  --set-thresh <INT>         differential size in % of full backup before
+                               a new full backup is be made
+                               valid values between 10-99 (default 70)
+  --set-limit <INT>          set or change size limit for backup location (GB)
+                               if set to 0, use all free space
+  --set-max <INT>            set maximum number of differential backups
+                               (optional) (default 0)
+
+Bakup at GitHub: <https://github.com/william-andersson/backup>
+EOF
+}
+
+view_version(){
+cat <<EOF
+bakup version $VERSION
+Copyright (C) 2024 William Andersson.
+License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+Written by William Andersson.
 EOF
 }
 
@@ -57,6 +82,9 @@ update_config(){
     echo "TIMER=$TIMER" >> /usr/local/etc/bakup.cfg
     echo "PREV=$PREV" >> /usr/local/etc/bakup.cfg
     echo "CURRENT=$CURRENT" >> /usr/local/etc/bakup.cfg
+    echo "THRESH=$THRESH" >> /usr/local/etc/bakup.cfg
+    echo "MAX=$MAX" >> /usr/local/etc/bakup.cfg
+    echo "HASH=$HASH" >> /usr/local/etc/bakup.cfg
 }
 
 setup(){
@@ -69,9 +97,10 @@ setup(){
     set_path "--set-dest" $DEST
     set_limit $LIMIT
     auto_timer $TIMER
-    
-    PREV=""
-    CURRENT=""
+    set_thresh 70
+    set_max 0
+
+    HASH=""
 
     if [ ! -d "/usr/local/etc" ];then
         mkdir -p /usr/local/etc
@@ -79,8 +108,27 @@ setup(){
     touch /usr/local/etc/bakup.cfg
     chmod 755 /usr/local/etc/bakup.cfg
 
+    search_for_backups
     update_config
     exit 0
+}
+
+search_for_backups(){
+    #
+    # Look for existing backups to use as starting point
+    #
+    if [ $(ls -l $DEST | grep index | wc -l) -eq 1 ];then
+        CURRENT=$(ls -t $DEST | grep -m 1 index | cut -f1 -d".")
+        PREV=$CURRENT
+        echo "Found existing backup. Added: [$CURRENT]"
+    elif [ $(ls -l $DEST | grep index | wc -l) -eq 2 ];then
+        CURRENT=$(ls -t $DEST | grep -m 1 index | cut -f1 -d".")
+        PREV=$(ls -tr $DEST | grep -m 1 index | cut -f1 -d".")
+        echo "Found existing backups. Added: [$CURRENT] and [$PREV]"
+    else
+        PREV=""
+        CURRENT=""
+    fi
 }
 
 auto_timer(){
@@ -104,7 +152,32 @@ set_limit(){
         echo "Input value not integer!"
         exit 1
     fi
-    LIMIT=$(($(($1*1024))*1024))
+    if [ "$1" == "0" ];then
+        LIMIT=0
+    else
+        LIMIT=$(($(($1*1024))*1024))
+    fi
+}
+
+set_thresh(){
+    if ! [[ $1 =~ ^[0-9]+$ ]];then
+        echo "Input value not integer!"
+        exit 1
+    fi
+    if [ $1 -ge 10 ] && [ $1 -lt 100 ];then
+        THRESH=$1
+    else
+        echo "Invalid thresh value (10-99)"
+        exit 1
+    fi
+}
+
+set_max(){
+    if ! [[ $1 =~ ^[0-9]+$ ]];then
+        echo "Input value not integer!"
+        exit 1
+    fi
+    MAX=$1
 }
 
 set_path(){
@@ -120,20 +193,25 @@ set_path(){
             echo "No such directory! [$TARGET]"
             exit 2
         else
-            echo "Target directory changed [$TARGET]"
+            echo "Target directory set [$TARGET]"
         fi
     elif [ "$1" == "--set-dest" ];then
         DEST=$2
         if [ ! -d "$DEST" ];then
             mkdir -pv $DEST
         fi
-        echo "Destination directory changed [$DEST]"
+        echo "Destination directory set [$DEST]"
     elif [ "$1" == "--migrate" ];then
         mkdir -pv ${2%/}
         mv -v $DEST/* -t ${2%/}/
-        rm -rv $DEST
-        DEST=$2
-        echo "Backup directory migrated to [$DEST]"
+        if [ "$?" == "0" ];then
+            rm -rv $DEST
+            DEST=$2
+            echo "Backup directory migrated to [$DEST]"
+        else
+            echo "There was an error during the migration!"
+            exit 1
+        fi
     fi
 }
 
@@ -191,7 +269,7 @@ cleanup_dest(){
 
 calc_space(){
     #
-    # Make sure limit is always 2x larger than target,
+    # Make sure limit is always 2x larger than target if not set to 0,
     # as long as disk space allows.
     #
     cleanup_dest
@@ -199,21 +277,24 @@ calc_space(){
     if [ $(($TARGET_SIZE*2)) -gt $LIMIT ];then
         local FREE_SPACE=$(df --block-size=1K $DEST | awk '/\// {print $4}')
         if [ $(($TARGET_SIZE*2)) -lt $FREE_SPACE ];then
-        
-            # Format output as human readable.
-            local NEW_LIMIT_GB=$(($(($(($TARGET_SIZE*2))/1024))/1024))
-            local NEW_LIMIT_MB=$(($(($TARGET_SIZE*2))/1024))
-            local NEW_LIMIT_KB=$(($TARGET_SIZE*2))
-            if [ $NEW_LIMIT_GB -ge 10 ];then
-                local NEW_LIMIT=$NEW_LIMIT_GB"GB"
-            elif [ $NEW_LIMIT_MB -ge 10 ];then
-                local NEW_LIMIT=$NEW_LIMIT_MB"MB"
+            if [ "$LIMIT" != "0" ];then
+                # Format output as human readable.
+                local NEW_LIMIT_GB=$(($(($(($TARGET_SIZE*2))/1024))/1024))
+                local NEW_LIMIT_MB=$(($(($TARGET_SIZE*2))/1024))
+                local NEW_LIMIT_KB=$(($TARGET_SIZE*2))
+                if [ $NEW_LIMIT_GB -ge 10 ];then
+                    local NEW_LIMIT=$NEW_LIMIT_GB"GB"
+                elif [ $NEW_LIMIT_MB -ge 10 ];then
+                    local NEW_LIMIT=$NEW_LIMIT_MB"MB"
+                else
+                    local NEW_LIMIT=$NEW_LIMIT_KB"KB"
+                fi
+                echo "Updating limit to [$NEW_LIMIT]"
+                LIMIT=$(($TARGET_SIZE*2))
+                update_config
             else
-                local NEW_LIMIT=$NEW_LIMIT_KB"KB"
+                echo "Limit set to free space."
             fi
-            echo "Updating limit to [$NEW_LIMIT]"
-            LIMIT=$(($TARGET_SIZE*2))
-            update_config
         else
             echo "[WARNING] Low disk space; backup history might be limited!"
             local TEN=$(($(($TARGET_SIZE/100))*10))
@@ -228,13 +309,16 @@ calc_space(){
     fi
 
     #
-    # Remove old backups if limit is reached.
+    # Remove old backups if limit is reached or if not enough free space
+    # when limit is set to 0.
     # Continue removing until space is sufficient.
     #
     while true; do
         local BACKUP_SIZE=$(du -s --block-size=1K $DEST | awk '{print $1}')
         local REQUIRED_SPACE=$(($BACKUP_SIZE+$TARGET_SIZE))
-        if [ $REQUIRED_SPACE -gt $LIMIT ];then
+        if [ "$LIMIT" != "0" ] && [ $REQUIRED_SPACE -gt $LIMIT ];then
+            remove_backup
+        elif [ "$LIMIT" == "0" ] && [ $REQUIRED_SPACE -ge $FREE_SPACE ];then
             remove_backup
         else
             echo "Sufficient free space."
@@ -245,16 +329,30 @@ calc_space(){
 
 get_thresh(){
     #
-    # If latest differential backup exceeds 70% of the original full backup,
+    # If MAX is set and reached, create new full backup OR
+    # if MAX is set to 0 and latest differential backup exceeds
+    # THRESH (default 70%) of the original full backup then
     # create a new full backup.
     #
+    if [ -z "$THRESH" ];then
+        set_thresh 70
+        update_config
+    fi
+    if [ -z "$MAX" ];then
+        set_max 0
+        update_config
+    fi
     if [ -f "$DEST/$CURRENT.index" ];then
         local LAST_BACKUP=$(cat $DEST/$CURRENT.index | tail -1)
         if [ ! -z "$LAST_BACKUP" ];then
             local LAST_BACKUP_SIZE=$(du -s --block-size=1K $DEST/$LAST_BACKUP.tgz | awk '{print $1}')
             local LAST_FULL_SIZE=$(du -s --block-size=1K $DEST/$CURRENT.tgz | awk '{print $1}')
-            local THRESH=$(($(($LAST_FULL_SIZE*70))/100))
-            if [ $LAST_BACKUP_SIZE -gt $THRESH ];then
+            local THRESH_VAL=$(($(($LAST_FULL_SIZE*$THRESH))/100))
+            if [ "$MAX" != "0" ] && [ $(wc -l < "$DEST/$CURRENT.index") -ge $MAX ];then
+                echo "MAX value ($MAX) reached."
+                NEW_FULL=1
+            elif [ $LAST_BACKUP_SIZE -ge $THRESH_VAL ];then
+                echo "THRESH value ($THRESH%) reached."
                 NEW_FULL=1
             else
                 NEW_FULL=0
@@ -267,13 +365,28 @@ get_thresh(){
     fi
 }
 
+files_changed(){
+    #
+    # Check if files has changed since previous backup.
+    # If not, no backup is needed.
+    #
+    STATE=$(find $TARGET -type f -exec md5sum {} + | LC_ALL=C sort | md5sum | awk '{print $1}')
+    if [ ! -z "$HASH" ] && [ "$STATE" == "$HASH" ];then
+        echo "Hash match, nothing to backup."
+        exit 0
+    else
+        HASH=$STATE
+        update_config
+    fi
+}
+
 create_backup(){
     if [ ! -d "$TARGET" ];then
         echo "No target directory!"
         exit 1
     elif [ ! -d "$DEST" ];then
         mkdir -pv $DEST
-    fi    
+    fi
     if [ -z "$CURRENT" ];then
         CURRENT=$DATE
     fi
@@ -282,6 +395,7 @@ create_backup(){
         exit 0
     fi
 
+    files_changed
     calc_space
     get_thresh
 
@@ -304,7 +418,7 @@ create_backup(){
 }
 
 restore_from_backup(){
-    if [ $# -lt "2" ];then
+    if [ "$#" -lt 2 ];then
         echo "Error: missing argument!"
         exit 2
     else
@@ -338,6 +452,11 @@ restore_from_backup(){
     exit 0
 }
 
+if [ "$#" -gt 3 ] && [ "$1" == "--restore" ] || [ "$#" -gt 2 ];then
+    echo "To many arguments."
+    exit 1
+fi
+
 case $1 in
     --setup)
         setup
@@ -356,6 +475,11 @@ case $1 in
         ;;
     --help)
         view_help
+        exit 0
+        ;;
+    --version)
+        view_version
+        exit 0
         ;;
     --set-target|--set-dest|--migrate)
         set_path $1 $2
@@ -369,7 +493,16 @@ case $1 in
         auto_timer $2
         update_config
         ;;
+    --set-thresh)
+        set_thresh $2
+        update_config
+        ;;
+    --set-max)
+        set_max $2
+        update_config
+        ;;
     *)
         view_help
+        exit 0
         ;;
 esac
