@@ -6,7 +6,7 @@
 # Website:     https://github.com/william-andersson
 # License:     GPL  
 #
-VERSION=7.1.1
+VERSION=7.1.2
 
 if [[ $EUID -ne 0 ]];then
     echo -e "\nThis script must be run as root!"
@@ -262,7 +262,7 @@ cleanup_dest(){
     # Remove all old backups that are not present in CURRENT or PREV
     echo "Cleaning up $DEST"
     for tgz in $(ls $DEST | grep .tgz);do
-        if [[ ! -f "$DEST/$CURRENT.index" ]] || [[ ! -f "$DEST/$CURRENT.index" ]];then
+        if [[ ! -f "$DEST/$CURRENT.index" ]] || [[ ! -f "$DEST/$PREV.index" ]];then
             echo "Missing index file; cleanup aborted!"
             break
         fi
