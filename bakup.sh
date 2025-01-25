@@ -2,8 +2,8 @@
 #
 # Application: Bakup
 # Comment:     Automated backups
-# Copyright:   William Andersson 2024
-# Website:     https://github.com/william-andersson
+# Copyright:   2023, William Andersson
+# Website:     https://github.com/kiwipy/backup
 # License:     GPL  
 #
 VERSION=7.1.2
@@ -59,14 +59,14 @@ Settings:
   --set-max <INT>            set maximum number of differential backups
                                (optional) (default 0)
 
-Bakup at GitHub: <https://github.com/william-andersson/backup>
+Bakup at GitHub: <https://github.com/kiwipy/backup>
 EOF
 }
 
 view_version(){
 cat <<EOF
 bakup version $VERSION
-Copyright (C) 2024 William Andersson.
+Copyright (C) 2023, William Andersson.
 License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.
